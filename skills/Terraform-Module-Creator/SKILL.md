@@ -86,18 +86,63 @@ variable "name" {
 }
 ```
 
+## config.yaml (Shared Context)
+
+Each leaf directory (`applications/<app>/`, `platform/<component>/`) has a `config.yaml` with shared tags and context. Always read it instead of hardcoding values.
+
+Repo structure:
+```
+Infrastructure/
+├── modules/           # Reusable modules
+├── applications/      # App-specific resources (ECR, IAM, secrets)
+│   └── <app>/
+│       └── config.yaml
+├── platform/          # Platform-level resources
+│   └── <component>/
+│       └── config.yaml
+└── README.md
+```
+
+Example `config.yaml`:
+```yaml
+network: "home-network"
+managedBy: "terraform"
+account: "cloudhaven"
+region: "us-east-1"
+cluster: "my-cluster"
+```
+
+Read it with `yamldecode` and merge into tags:
+
+```hcl
+locals {
+  config = yamldecode(file("${path.module}/config.yaml"))
+
+  tags = merge({
+    Name      = var.name
+    ManagedBy = local.config.managedBy
+    Account   = local.config.account
+    Network   = local.config.network
+  }, var.tags)
+}
+```
+
+This keeps tags consistent without repeating them across every resource.
+
 ## main.tf
 
 Use locals for computed values. Keep it clean:
 
 ```hcl
 locals {
+  config  = yamldecode(file("${path.module}/config.yaml"))
   is_prod = var.environment == "prod"
 
   tags = merge({
     Name        = var.name
     Environment = var.environment
-    ManagedBy   = "terraform"
+    ManagedBy   = local.config.managedBy
+    Account     = local.config.account
   }, var.tags)
 }
 
